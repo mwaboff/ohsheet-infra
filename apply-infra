@@ -34,7 +34,11 @@ if docker compose -f "$LIVE/compose.yaml" ps dawn --quiet 2>/dev/null | grep -q 
 fi
 
 # 5. Apply compose changes without touching image tags
-docker compose -f "$LIVE/compose.yaml" up -d --no-build
+# --no-build: never build locally; images are pushed by core/dawn release workflows.
+# Pull failures are tolerated (images may not exist yet on first infra deploy).
+docker compose -f "$LIVE/compose.yaml" up -d --no-build 2>&1 || {
+    echo "NOTE: docker compose up failed (images may not exist yet). Continuing."
+}
 
 # 6. Update apply-infra itself LAST so an error above doesn't leave us with a broken script
 if [ -f "$STAGING/apply-infra" ] && ! cmp -s "$STAGING/apply-infra" /usr/local/sbin/apply-infra; then
