@@ -32,6 +32,12 @@ jobs:
 
       - name: Validate systemd units
         run: |
+          # Create stub executables for paths referenced by service files
+          sudo mkdir -p /usr/local/bin /usr/local/sbin
+          for stub in /usr/local/bin/ohsheet-backup.sh /usr/local/bin/ohsheet-disk-check.sh /usr/sbin/logrotate /usr/bin/docker; do
+            sudo touch "$stub"
+            sudo chmod +x "$stub"
+          done
           for unit in systemd/*.service systemd/*.timer; do
             systemd-analyze verify "$unit" || exit 1
           done

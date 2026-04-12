@@ -13,7 +13,7 @@
 #
 # In --existing-secrets mode, the script reads POSTGRES_PASSWORD, JWT_SECRET,
 # and BACKUP_PASSPHRASE from the environment instead of generating fresh values.
-# This is the disaster-recovery path described in section 14b of the design doc.
+# This is the disaster-recovery path described in section 14b of the design docs
 
 set -euo pipefail
 
