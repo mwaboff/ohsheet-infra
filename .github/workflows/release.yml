@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Rsync infra to staging area on Linode
         uses: burnett01/rsync-deployments@7.0.1
