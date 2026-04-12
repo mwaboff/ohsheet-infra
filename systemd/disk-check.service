@@ -1,0 +1,6 @@
+[Unit]
+Description=ohsheet hourly disk usage check
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ohsheet-disk-check.sh

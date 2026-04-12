@@ -1,0 +1,61 @@
+/var/log/ohsheet/core/core.log {
+    daily
+    rotate 30
+    maxsize 50M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    dateext
+    dateformat -%Y-%m-%d
+}
+
+/var/log/ohsheet/caddy/*.log {
+    daily
+    rotate 30
+    maxsize 30M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    dateext
+    dateformat -%Y-%m-%d
+}
+
+/var/log/ohsheet/postgres/postgres.log {
+    daily
+    rotate 30
+    maxsize 10M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    dateext
+    dateformat -%Y-%m-%d
+}
+
+/var/log/ohsheet/events.jsonl {
+    daily
+    rotate 30
+    maxsize 20M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    dateext
+    dateformat -%Y-%m-%d
+}
+
+/var/log/ohsheet/disk.log {
+    weekly
+    rotate 8
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

@@ -1,0 +1,65 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - /var/lib/ohsheet/postgres:/var/lib/postgresql/data
+      - /var/log/ohsheet/postgres:/var/log/postgres
+    command: >
+      postgres
+      -c logging_collector=on
+      -c log_directory=/var/log/postgres
+      -c log_filename=postgres.log
+      -c log_rotation_size=0
+      -c log_rotation_age=0
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [internal]
+
+  core:
+    image: ghcr.io/${GHCR_OWNER}/core:${CORE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      SPRING_PROFILES_ACTIVE: prod
+    volumes:
+      - /var/log/ohsheet/core:/app/logs
+    mem_limit: 640m
+    memswap_limit: 640m
+    networks: [internal]
+
+  dawn:
+    image: ghcr.io/${GHCR_OWNER}/dawn:${DAWN_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      - core
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - /var/log/ohsheet/caddy:/var/log/caddy
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [internal]
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:

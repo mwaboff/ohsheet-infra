@@ -1,0 +1,8 @@
+[Unit]
+Description=Encrypted Postgres backup for ohsheet
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/ohsheet-backup.sh

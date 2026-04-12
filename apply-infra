@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+STAGING=/srv/ohsheet/infra-staging
+LIVE=/srv/ohsheet
+
+# 1. Config files into live locations
+install -m 0644 "$STAGING/compose.yaml"            "$LIVE/compose.yaml"
+install -m 0644 "$STAGING/caddy/Caddyfile"         "$LIVE/caddy/Caddyfile"
+install -m 0755 "$STAGING/scripts/backup.sh"       /usr/local/bin/ohsheet-backup.sh
+install -m 0755 "$STAGING/scripts/disk-check.sh"   /usr/local/bin/ohsheet-disk-check.sh
+install -d /usr/local/lib/ohsheet
+install -m 0644 "$STAGING/scripts/lib/emit-event.sh" /usr/local/lib/ohsheet/emit-event.sh
+
+# 2. systemd units
+install -m 0644 "$STAGING"/systemd/*.service "$STAGING"/systemd/*.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now pg-backup.timer disk-check.timer \
+                       logrotate-ohsheet.timer docker-prune.timer
+
+# 3. logrotate + docker daemon config
+install -m 0644 "$STAGING/logrotate/ohsheet" /etc/logrotate.d/ohsheet
+
+# Only restart docker if daemon.json actually changed
+if ! cmp -s "$STAGING/docker/daemon.json" /etc/docker/daemon.json 2>/dev/null; then
+    install -m 0644 "$STAGING/docker/daemon.json" /etc/docker/daemon.json
+    systemctl restart docker
+fi
+
+# 4. Live Caddy reload if compose is up (zero-downtime config apply)
+if docker compose -f "$LIVE/compose.yaml" ps dawn --quiet 2>/dev/null | grep -q .; then
+    docker compose -f "$LIVE/compose.yaml" exec -T dawn \
+        caddy reload --config /etc/caddy/Caddyfile || true
+fi
+
+# 5. Apply compose changes without touching image tags
+docker compose -f "$LIVE/compose.yaml" up -d --no-build
+
+# 6. Update apply-infra itself LAST so an error above doesn't leave us with a broken script
+if [ -f "$STAGING/apply-infra" ] && ! cmp -s "$STAGING/apply-infra" /usr/local/sbin/apply-infra; then
+    install -m 0755 "$STAGING/apply-infra" /usr/local/sbin/apply-infra
+fi

@@ -1,0 +1,62 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shellcheck all bash scripts
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          severity: warning
+
+      - name: Validate compose.yaml
+        run: docker compose -f compose.yaml config --quiet
+        env:
+          CORE_TAG: test
+          DAWN_TAG: test
+          GHCR_OWNER: test
+          POSTGRES_DB: test
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          JWT_SECRET: test
+
+      - name: Validate systemd units
+        run: |
+          for unit in systemd/*.service systemd/*.timer; do
+            systemd-analyze verify "$unit" || exit 1
+          done
+
+      - name: Validate logrotate config
+        run: logrotate -d logrotate/ohsheet
+
+      - name: Validate Caddyfile
+        run: |
+          docker run --rm -v "$PWD/caddy:/etc/caddy" caddy:2-alpine \
+            caddy validate --config /etc/caddy/Caddyfile
+
+      - name: Destructive command linter
+        run: |
+          set -e
+          # Block known-dangerous patterns outside of explicit allowlist
+          ! grep -rn --include='*.sh' -E '(rm -rf /|rm -rf \$|dd if=|mkfs|:(){|DROP DATABASE|docker system prune -a)' scripts/ apply-infra bootstrap.sh \
+            || { echo "Destructive command detected"; exit 1; }
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

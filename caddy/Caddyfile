@@ -1,0 +1,22 @@
+ohsheet.aboff.com {
+	encode gzip zstd
+
+	log access {
+		output file /var/log/caddy/access.log
+	}
+
+	log errors {
+		output file /var/log/caddy/error.log
+		level ERROR
+	}
+
+	handle /api/* {
+		reverse_proxy core:8080
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

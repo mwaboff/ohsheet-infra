@@ -1,0 +1,8 @@
+[Unit]
+Description=Prune unused docker images for ohsheet
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker image prune -a --filter until=168h -f

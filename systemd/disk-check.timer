@@ -1,0 +1,10 @@
+[Unit]
+Description=Run ohsheet disk-check hourly
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=1h
+Unit=disk-check.service
+
+[Install]
+WantedBy=timers.target

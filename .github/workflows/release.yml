@@ -1,0 +1,35 @@
+name: Release
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rsync infra to staging area on Linode
+        uses: burnett01/rsync-deployments@7.0.1
+        with:
+          switches: -avzh --delete
+          path: ./
+          remote_path: /srv/ohsheet/infra-staging/
+          remote_host: ${{ secrets.LINODE_HOST }}
+          remote_user: deploy
+          remote_key: ${{ secrets.DEPLOY_SSH_KEY }}
+
+      - name: Apply infra changes
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.LINODE_HOST }}
+          username: deploy
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            sudo /usr/local/sbin/apply-infra
