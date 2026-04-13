@@ -37,6 +37,7 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
       SPRING_PROFILES_ACTIVE: prod
     volumes:
       - /var/log/ohsheet/core:/app/logs
