@@ -14,6 +14,14 @@ ohsheet.aboff.com {
 		reverse_proxy core:8080
 	}
 
+	handle /oauth2/* {
+		reverse_proxy core:8080
+	}
+
+	handle /login/oauth2/* {
+		reverse_proxy core:8080
+	}
+
 	handle {
 		root * /srv
 		try_files {path} /index.html
