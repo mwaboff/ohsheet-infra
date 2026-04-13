@@ -10,15 +10,8 @@ ohsheet.aboff.com {
 		level ERROR
 	}
 
-	handle /api/* {
-		reverse_proxy core:8080
-	}
-
-	handle /oauth2/* {
-		reverse_proxy core:8080
-	}
-
-	handle /login/oauth2/* {
+	@backend path /api/* /oauth2/* /login/oauth2/*
+	handle @backend {
 		reverse_proxy core:8080
 	}
 
