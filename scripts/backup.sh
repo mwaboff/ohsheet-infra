@@ -25,13 +25,19 @@ if [ "$available_mb" -lt 2048 ]; then
     exit 1
 fi
 
-# Dump, compress, encrypt in one pipeline
+# Dump, compress, encrypt in one pipeline. Write to a temp name and rename on
+# success: a second run on the same day (apply-infra's pre-deploy backup after
+# the nightly one) replaces today's file atomically, and a failed run never
+# clobbers a good backup. The .tmp suffix keeps it out of the prune glob below.
+TMPFILE="${OUTFILE}.tmp"
+trap 'rm -f "$TMPFILE"' EXIT
 docker compose -f /srv/ohsheet/compose.yaml exec -T postgres \
     pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
   | gzip \
-  | gpg --batch --symmetric --cipher-algo AES256 \
+  | gpg --batch --yes --symmetric --cipher-algo AES256 \
         --passphrase-file "$PASSPHRASE_FILE" \
-        --output "$OUTFILE"
+        --output "$TMPFILE"
+mv -f "$TMPFILE" "$OUTFILE"
 
 dump_size=$(stat -c%s "$OUTFILE")
 
