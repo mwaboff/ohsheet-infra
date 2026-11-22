@@ -46,6 +46,47 @@ jobs:
       - name: Validate logrotate config
         run: logrotate -d logrotate/ohsheet
 
+      - name: Validate unattended-upgrades config
+        run: |
+          # Same OS + Docker apt repo as the Linode; asserts the file parses and
+          # that unattended-upgrades would actually allow Debian and
+          # Docker packages (a typo in the origin pattern silently matches nothing).
+          docker run --rm -i -v "$PWD/apt:/cfg:ro" debian:12 bash -e <<'SH'
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq unattended-upgrades ca-certificates curl >/dev/null
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+          echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" \
+            > /etc/apt/sources.list.d/docker.list
+          apt-get update -qq
+          cp /cfg/52ohsheet-unattended-upgrades /etc/apt/apt.conf.d/
+          cp /cfg/ohsheet-docker-pin /etc/apt/preferences.d/
+          apt-config dump | grep -q 'Unattended-Upgrade::Automatic-Reboot "true"'
+          python3 - <<'PY'
+          import importlib.machinery, importlib.util, apt
+          # unattended-upgrades ships as a script, not a module; load its functions.
+          loader = importlib.machinery.SourceFileLoader("uu", "/usr/bin/unattended-upgrade")
+          uu = importlib.util.module_from_spec(importlib.util.spec_from_loader("uu", loader))
+          loader.exec_module(uu)  # also loads apt config; no apt_pkg.init() needed
+          allowed = uu.get_allowed_origins()
+          print("allowed origins:", allowed)
+          cache = apt.Cache()
+          for pkg in ("docker-ce", "containerd.io", "docker-compose-plugin", "base-files"):
+              # Ignore the installed-status origin ("now"), which is always allowed.
+              origins = [o for o in cache[pkg].candidate.origins if o.archive != "now"]
+              assert origins, pkg
+              ok = any(uu.is_allowed_origin(o, allowed) for o in origins)
+              print(pkg, [(o.origin, o.label, o.archive) for o in origins], "allowed" if ok else "NOT ALLOWED")
+              assert ok, pkg
+          # The major-version pin parses and steers the candidate.
+          for pkg, prefix in (("docker-ce", "5:29."), ("containerd.io", "2."), ("docker-compose-plugin", "5.")):
+              v = cache[pkg].candidate.version
+              print(pkg, "candidate", v)
+              assert v.startswith(prefix), (pkg, v)
+          PY
+          SH
+
       - name: Validate Caddyfile
         run: |
           docker run --rm -v "$PWD/caddy:/etc/caddy" caddy:2-alpine \

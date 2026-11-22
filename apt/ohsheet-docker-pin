@@ -1,0 +1,15 @@
+Explanation: Managed by ohsheet-infra (installed by apply-infra; local edits are overwritten).
+Explanation: unattended-upgrades takes Docker patch/minor releases automatically but stays
+Explanation: on these majors. A major bump is a reviewed PR that edits the versions below.
+Package: docker-ce docker-ce-cli docker-ce-rootless-extras
+Pin: version 5:29.*
+Pin-Priority: 990
+
+Explanation: Compose CLI plugin (backup.sh and apply-infra depend on its flags).
+Package: docker-compose-plugin
+Pin: version 5.*
+Pin-Priority: 990
+
+Package: containerd.io
+Pin: version 2.*
+Pin-Priority: 990

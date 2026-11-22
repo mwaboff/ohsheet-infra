@@ -25,13 +25,21 @@ if [ "$available_mb" -lt 2048 ]; then
     exit 1
 fi
 
-# Dump, compress, encrypt in one pipeline
+# Dump, compress, encrypt in one pipeline. Write to a unique temp file and
+# rename on success: a second run on the same day (apply-infra's pre-deploy
+# backup after the nightly one) replaces today's file atomically, overlapping
+# runs never share a file, and a failed run never clobbers a good backup. The
+# dot-prefixed name keeps temp files out of the prune glob below.
+find "$BACKUP_DIR" -maxdepth 1 -name '.pg-*.tmp' -mmin +120 -delete  # leaked by killed runs
+TMPFILE=$(mktemp --suffix=.tmp "$BACKUP_DIR/.pg-${TODAY}.XXXXXX")
+trap 'rm -f "$TMPFILE"' EXIT
 docker compose -f /srv/ohsheet/compose.yaml exec -T postgres \
     pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
   | gzip \
-  | gpg --batch --symmetric --cipher-algo AES256 \
+  | gpg --batch --yes --symmetric --cipher-algo AES256 \
         --passphrase-file "$PASSPHRASE_FILE" \
-        --output "$OUTFILE"
+        --output "$TMPFILE"
+mv -f "$TMPFILE" "$OUTFILE"
 
 dump_size=$(stat -c%s "$OUTFILE")
 
@@ -40,27 +48,17 @@ if [ "$dump_size" -gt 524288000 ]; then
     emit_event "BackupRun" "warn" "backup size ${dump_size}B > 500MB"
 fi
 
-# Prune: keep today, yesterday, and oldest file >= 7 days old
+# Prune: keep the last 30 days of nightly dumps (each is ~1 MB). The previous
+# scheme kept "the oldest file >= 7 days old", which froze on the very first
+# backup ever taken instead of rolling weekly.
 cd "$BACKUP_DIR"
-all_files=$(ls -1 pg-*.sql.gz.gpg | sort)
-today_file="pg-${TODAY}.sql.gz.gpg"
-yesterday_file="pg-$(date -d yesterday +%F).sql.gz.gpg"
-
-# Find oldest file that's at least 7 days old
-weekly_keep=""
-for f in $all_files; do
+cutoff=$(date -d "30 days ago" +%F)
+for f in pg-*.sql.gz.gpg; do
+    [ -e "$f" ] || continue
     file_date=${f#pg-}
     file_date=${file_date%.sql.gz.gpg}
-    age_days=$(( ( $(date +%s) - $(date -d "$file_date" +%s) ) / 86400 ))
-    if [ "$age_days" -ge 7 ]; then
-        weekly_keep="$f"
-        break
-    fi
-done
-
-for f in $all_files; do
-    if [ "$f" != "$today_file" ] && [ "$f" != "$yesterday_file" ] && [ "$f" != "$weekly_keep" ]; then
-        rm -f "$f"
+    if [[ "$file_date" < "$cutoff" ]]; then
+        rm -f -- "$f"
     fi
 done
 

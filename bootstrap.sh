@@ -118,6 +118,9 @@ if ! command -v docker >/dev/null 2>&1; then
     . /etc/os-release
     echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian ${VERSION_CODENAME} stable" \
         > /etc/apt/sources.list.d/docker.list
+    # Pin majors BEFORE installing: apt never downgrades, so a pin added after
+    # a newer major was installed would silently do nothing.
+    install -m 0644 "$SCRIPT_DIR/apt/ohsheet-docker-pin" /etc/apt/preferences.d/ohsheet-docker-pin
     apt-get update
     apt-get install -y \
         docker-ce docker-ce-cli containerd.io \

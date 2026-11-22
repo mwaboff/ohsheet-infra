@@ -4,7 +4,12 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-  - package-ecosystem: "docker"
+  # compose.yaml pins postgres to an exact minor; propose patch bumps only.
+  # A major upgrade needs pg_upgrade / dump-restore and is done by hand.
+  - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]

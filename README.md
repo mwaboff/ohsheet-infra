@@ -217,6 +217,23 @@ chmod 0400 /root/.backup-passphrase
 
 ## Rollback a bad deploy
 
+### Postgres image upgrade failed (deploy red at the health check)
+
+The data directory is untouched by an image swap and `apply-infra` took an
+encrypted backup first. A revert deploy will refuse to run while a postgres
+container exists but is stopped, so recover by hand:
+
+```bash
+ssh michael@ohsheet.aboff.com
+docker logs --tail 100 ohsheet-postgres-1      # why it won't start
+# Pin compose.yaml back to the previous image (16.13 was
+# postgres@sha256:20edbde7749f822887a1a022ad526fde0a47d6b2be9a8364433605cf65099416;
+# docker-prune removes unused images after 7 days, so pull it again if needed)
+sudo -u deploy docker compose -f /srv/ohsheet/compose.yaml up -d --no-build postgres
+```
+
+Then revert the image bump in this repo so the next deploy matches.
+
 ### Option 1 — re-run previous successful workflow (fastest)
 
 1. GitHub → `core` (or `dawn`) repo → Actions tab.
@@ -285,6 +302,8 @@ for off-site backup future work.
 | `systemd/*.{service,timer}` | `/etc/systemd/system/` | Timers |
 | `logrotate/ohsheet` | `/etc/logrotate.d/ohsheet` | Log rotation |
 | `docker/daemon.json` | `/etc/docker/daemon.json` | Docker log driver caps |
+| `apt/52ohsheet-unattended-upgrades` | `/etc/apt/apt.conf.d/` | Auto-update Docker; reboot when required |
+| `apt/ohsheet-docker-pin` | `/etc/apt/preferences.d/` | Hold Docker/containerd/compose to current majors |
 | `apply-infra` | `/usr/local/sbin/apply-infra` | Narrow sudo entry point |
 | `sudoers/deploy-apply-infra` | `/etc/sudoers.d/deploy-apply-infra` | Sudo rule |
 | `bootstrap.sh` | — (run once via LISH) | One-time provisioning |
