@@ -4,6 +4,12 @@ set -euo pipefail
 STAGING=/srv/ohsheet/infra-staging
 LIVE=/srv/ohsheet
 
+# 0. Fresh backup before anything below can restart postgres (image bump,
+# compose change, docker daemon restart). A failed backup aborts the deploy.
+if docker compose -f "$LIVE/compose.yaml" ps postgres --status running --quiet 2>/dev/null | grep -q .; then
+    /usr/local/bin/ohsheet-backup.sh
+fi
+
 # 1. Config files into live locations
 install -m 0644 "$STAGING/compose.yaml"            "$LIVE/compose.yaml"
 install -m 0644 "$STAGING/caddy/Caddyfile"         "$LIVE/caddy/Caddyfile"
@@ -18,8 +24,10 @@ systemctl daemon-reload
 systemctl enable --now pg-backup.timer disk-check.timer \
                        logrotate-ohsheet.timer docker-prune.timer
 
-# 3. logrotate + docker daemon config
+# 3. logrotate, unattended-upgrades policy, docker daemon config
 install -m 0644 "$STAGING/logrotate/ohsheet" /etc/logrotate.d/ohsheet
+install -m 0644 "$STAGING/apt/52ohsheet-unattended-upgrades" \
+    /etc/apt/apt.conf.d/52ohsheet-unattended-upgrades
 
 # Only restart docker if daemon.json actually changed
 if ! cmp -s "$STAGING/docker/daemon.json" /etc/docker/daemon.json 2>/dev/null; then

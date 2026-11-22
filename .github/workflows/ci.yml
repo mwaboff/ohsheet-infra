@@ -46,6 +46,35 @@ jobs:
       - name: Validate logrotate config
         run: logrotate -d logrotate/ohsheet
 
+      - name: Validate unattended-upgrades config
+        run: |
+          # Same OS + Docker apt repo as the Linode; asserts the file parses and
+          # that unattended-upgrades would actually allow Debian and
+          # Docker packages (a typo in the origin pattern silently matches nothing).
+          docker run --rm -i -v "$PWD/apt:/cfg:ro" debian:12 bash -e <<'SH'
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq unattended-upgrades ca-certificates curl >/dev/null
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+          echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" \
+            > /etc/apt/sources.list.d/docker.list
+          apt-get update -qq
+          cp /cfg/52ohsheet-unattended-upgrades /etc/apt/apt.conf.d/
+          apt-config dump | grep -q 'Unattended-Upgrade::Automatic-Reboot "true"'
+          python3 - <<'PY'
+          import apt, unattended_upgrades as uu
+          allowed = uu.get_allowed_origins()
+          print("allowed origins:", allowed)
+          cache = apt.Cache()
+          for pkg in ("docker-ce", "containerd.io", "docker-compose-plugin", "base-files"):
+              origins = cache[pkg].candidate.origins
+              ok = any(uu.is_allowed_origin(o, allowed) for o in origins)
+              print(pkg, [(o.origin, o.label, o.archive) for o in origins], "allowed" if ok else "NOT ALLOWED")
+              assert ok, pkg
+          PY
+          SH
+
       - name: Validate Caddyfile
         run: |
           docker run --rm -v "$PWD/caddy:/etc/caddy" caddy:2-alpine \

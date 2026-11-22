@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # Pinned to an exact minor so a bump is an explicit, reviewed change:
+    # apply-infra recreates the container on the new image (same data dir).
+    image: postgres:16.16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}

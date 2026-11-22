@@ -1,0 +1,17 @@
+// Managed by ohsheet-infra — installed by apply-infra. Local edits are overwritten on deploy.
+//
+// Layered on top of Debian's stock 50unattended-upgrades. List entries here are
+// appended to the stock Origins-Pattern, so Debian security updates still apply.
+
+// Also keep Docker Engine / containerd / compose plugin current. The Docker apt
+// repo publishes Origin "Docker", Label "Docker CE", Suite "<codename>".
+// Upgrading docker-ce restarts the daemon; every service is restart: unless-stopped.
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Docker,label=Docker CE,archive=${distro_codename}";
+};
+
+// Reboot when an update requires it (kernel, libc, ...), immediately after the
+// nightly unattended-upgrades run (apt-daily-upgrade.timer, ~06:00-07:00 UTC),
+// which is always after the 03:00 UTC pg-backup.timer. No reboot otherwise.
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "now";
