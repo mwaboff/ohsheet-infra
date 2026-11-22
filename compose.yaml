@@ -1,7 +1,13 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # Pinned by version + digest so postgres only changes through a reviewed
+    # PR (Dependabot proposes patch/digest bumps). apply-infra backs up, pulls
+    # the new image and recreates the container on the same data dir.
+    image: postgres:16.16-alpine@sha256:f2f98726820d0342055351c6e9d36e705f5bfffb3dd53ff556325114b08afb6d
     restart: unless-stopped
+    # Room for a clean fast shutdown (checkpoint) when compose recreates or
+    # stops postgres, before SIGKILL; compose's default is 10s.
+    stop_grace_period: 60s
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
