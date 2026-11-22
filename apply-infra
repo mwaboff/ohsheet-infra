@@ -15,13 +15,27 @@ install -m 0644 "$STAGING/scripts/lib/emit-event.sh" /usr/local/lib/ohsheet/emit
 # compose error aborts the deploy (set -e) instead of silently skipping the
 # backup; a failed backup aborts it too. No compose.yaml yet = first deploy on
 # a freshly bootstrapped host: nothing is running, nothing to back up.
+pg_exists=""
 pg_running=""
 if [ -f "$LIVE/compose.yaml" ]; then
+    pg_exists=$(docker compose -f "$LIVE/compose.yaml" ps -a postgres --quiet)
     pg_running=$(docker compose -f "$LIVE/compose.yaml" ps postgres --status running --quiet)
+fi
+if [ -n "$pg_exists" ] && [ -z "$pg_running" ]; then
+    echo "ERROR: postgres container exists but is not running; refusing to deploy without a fresh backup" >&2
+    exit 1
 fi
 if [ -n "$pg_running" ]; then
     /usr/local/bin/ohsheet-backup.sh
 fi
+
+# 2b. Pull postgres from the STAGED compose.yaml, before it goes live. A failed
+# pull (registry outage, rate limit) aborts here with the live compose.yaml
+# still matching the running container, so a later core/dawn release cannot
+# recreate postgres outside this script. --policy missing: only fetch when the
+# pinned image is absent, so routine deploys never re-pull a rebuilt tag.
+docker compose -f "$STAGING/compose.yaml" --project-directory "$LIVE" \
+    pull --quiet --policy missing postgres
 
 # 3. Config files into live locations
 install -m 0644 "$STAGING/compose.yaml"            "$LIVE/compose.yaml"
@@ -37,6 +51,7 @@ systemctl enable --now pg-backup.timer disk-check.timer \
 install -m 0644 "$STAGING/logrotate/ohsheet" /etc/logrotate.d/ohsheet
 install -m 0644 "$STAGING/apt/52ohsheet-unattended-upgrades" \
     /etc/apt/apt.conf.d/52ohsheet-unattended-upgrades
+install -m 0644 "$STAGING/apt/ohsheet-docker-pin" /etc/apt/preferences.d/ohsheet-docker-pin
 
 # Only restart docker if daemon.json actually changed
 if ! cmp -s "$STAGING/docker/daemon.json" /etc/docker/daemon.json 2>/dev/null; then
@@ -50,15 +65,25 @@ if docker compose -f "$LIVE/compose.yaml" ps dawn --quiet 2>/dev/null | grep -q 
         caddy reload --config /etc/caddy/Caddyfile || true
 fi
 
-# 7. Pull postgres explicitly so a failed pull fails the deploy instead of
-# being swallowed below (the running container is untouched if this fails).
-# --policy missing: only fetch when compose.yaml names an image we don't have,
-# so routine deploys never swap postgres onto a silently rebuilt tag.
-docker compose -f "$LIVE/compose.yaml" pull --quiet --policy missing postgres
+# 7. Postgres first, and fatally: a failed recreate must fail the deploy.
+docker compose -f "$LIVE/compose.yaml" up -d --no-build postgres
 
-# 8. Apply compose changes without touching image tags
+# Wait for the healthcheck so a postgres that won't start turns the deploy red.
+pg_health=""
+for _ in $(seq 1 30); do
+    pg_health=$(docker inspect -f '{{.State.Health.Status}}' \
+        "$(docker compose -f "$LIVE/compose.yaml" ps -q postgres)" 2>/dev/null || true)
+    [ "$pg_health" = "healthy" ] && break
+    sleep 4
+done
+if [ "$pg_health" != "healthy" ]; then
+    echo "ERROR: postgres not healthy after deploy (status: ${pg_health:-unknown})" >&2
+    exit 1
+fi
+
+# 8. Apply remaining compose changes without touching image tags
 # --no-build: never build locally; images are pushed by core/dawn release workflows.
-# Pull failures are tolerated (images may not exist yet on first infra deploy).
+# Failures are tolerated (core/dawn images may not exist yet on first infra deploy).
 docker compose -f "$LIVE/compose.yaml" up -d --no-build 2>&1 || {
     echo "NOTE: docker compose up failed (images may not exist yet). Continuing."
 }

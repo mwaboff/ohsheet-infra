@@ -286,6 +286,7 @@ for off-site backup future work.
 | `logrotate/ohsheet` | `/etc/logrotate.d/ohsheet` | Log rotation |
 | `docker/daemon.json` | `/etc/docker/daemon.json` | Docker log driver caps |
 | `apt/52ohsheet-unattended-upgrades` | `/etc/apt/apt.conf.d/` | Auto-update Docker; reboot when required |
+| `apt/ohsheet-docker-pin` | `/etc/apt/preferences.d/` | Hold Docker/containerd/compose to current majors |
 | `apply-infra` | `/usr/local/sbin/apply-infra` | Narrow sudo entry point |
 | `sudoers/deploy-apply-infra` | `/etc/sudoers.d/deploy-apply-infra` | Sudo rule |
 | `bootstrap.sh` | — (run once via LISH) | One-time provisioning |

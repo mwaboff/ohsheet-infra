@@ -61,6 +61,7 @@ jobs:
             > /etc/apt/sources.list.d/docker.list
           apt-get update -qq
           cp /cfg/52ohsheet-unattended-upgrades /etc/apt/apt.conf.d/
+          cp /cfg/ohsheet-docker-pin /etc/apt/preferences.d/
           apt-config dump | grep -q 'Unattended-Upgrade::Automatic-Reboot "true"'
           python3 - <<'PY'
           import importlib.machinery, importlib.util, apt
@@ -78,6 +79,11 @@ jobs:
               ok = any(uu.is_allowed_origin(o, allowed) for o in origins)
               print(pkg, [(o.origin, o.label, o.archive) for o in origins], "allowed" if ok else "NOT ALLOWED")
               assert ok, pkg
+          # The major-version pin parses and steers the candidate.
+          for pkg, prefix in (("docker-ce", "5:29."), ("containerd.io", "2."), ("docker-compose-plugin", "5.")):
+              v = cache[pkg].candidate.version
+              print(pkg, "candidate", v)
+              assert v.startswith(prefix), (pkg, v)
           PY
           SH
 
