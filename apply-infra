@@ -13,8 +13,12 @@ install -m 0644 "$STAGING/scripts/lib/emit-event.sh" /usr/local/lib/ohsheet/emit
 # 2. Fresh backup before anything below can restart postgres (image bump,
 # compose change, docker daemon restart). Captured in a variable so that a
 # compose error aborts the deploy (set -e) instead of silently skipping the
-# backup; a failed backup aborts it too.
-pg_running=$(docker compose -f "$LIVE/compose.yaml" ps postgres --status running --quiet)
+# backup; a failed backup aborts it too. No compose.yaml yet = first deploy on
+# a freshly bootstrapped host: nothing is running, nothing to back up.
+pg_running=""
+if [ -f "$LIVE/compose.yaml" ]; then
+    pg_running=$(docker compose -f "$LIVE/compose.yaml" ps postgres --status running --quiet)
+fi
 if [ -n "$pg_running" ]; then
     /usr/local/bin/ohsheet-backup.sh
 fi
@@ -48,7 +52,9 @@ fi
 
 # 7. Pull postgres explicitly so a failed pull fails the deploy instead of
 # being swallowed below (the running container is untouched if this fails).
-docker compose -f "$LIVE/compose.yaml" pull --quiet postgres
+# --policy missing: only fetch when compose.yaml names an image we don't have,
+# so routine deploys never swap postgres onto a silently rebuilt tag.
+docker compose -f "$LIVE/compose.yaml" pull --quiet --policy missing postgres
 
 # 8. Apply compose changes without touching image tags
 # --no-build: never build locally; images are pushed by core/dawn release workflows.

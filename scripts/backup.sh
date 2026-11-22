@@ -25,11 +25,13 @@ if [ "$available_mb" -lt 2048 ]; then
     exit 1
 fi
 
-# Dump, compress, encrypt in one pipeline. Write to a temp name and rename on
-# success: a second run on the same day (apply-infra's pre-deploy backup after
-# the nightly one) replaces today's file atomically, and a failed run never
-# clobbers a good backup. The .tmp suffix keeps it out of the prune glob below.
-TMPFILE="${OUTFILE}.tmp"
+# Dump, compress, encrypt in one pipeline. Write to a unique temp file and
+# rename on success: a second run on the same day (apply-infra's pre-deploy
+# backup after the nightly one) replaces today's file atomically, overlapping
+# runs never share a file, and a failed run never clobbers a good backup. The
+# dot-prefixed name keeps temp files out of the prune glob below.
+find "$BACKUP_DIR" -maxdepth 1 -name '.pg-*.tmp' -mmin +120 -delete  # leaked by killed runs
+TMPFILE=$(mktemp --suffix=.tmp "$BACKUP_DIR/.pg-${TODAY}.XXXXXX")
 trap 'rm -f "$TMPFILE"' EXIT
 docker compose -f /srv/ohsheet/compose.yaml exec -T postgres \
     pg_dump -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" \
