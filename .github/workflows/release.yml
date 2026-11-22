@@ -3,7 +3,9 @@ on:
   push:
     branches: [main]
 
-# One production deploy at a time, in merge order (never cancel a running one).
+# One production deploy at a time; a running deploy is never cancelled. Note that
+# a run waiting for approval holds its slot, and a newer queued run REPLACES an
+# older pending one, so don't merge again while a deploy awaits approval.
 concurrency:
   group: production
   cancel-in-progress: false
