@@ -63,7 +63,12 @@ jobs:
           cp /cfg/52ohsheet-unattended-upgrades /etc/apt/apt.conf.d/
           apt-config dump | grep -q 'Unattended-Upgrade::Automatic-Reboot "true"'
           python3 - <<'PY'
-          import apt, unattended_upgrades as uu
+          import importlib.machinery, importlib.util, apt, apt_pkg
+          # unattended-upgrades ships as a script, not a module; load its functions.
+          loader = importlib.machinery.SourceFileLoader("uu", "/usr/bin/unattended-upgrade")
+          uu = importlib.util.module_from_spec(importlib.util.spec_from_loader("uu", loader))
+          loader.exec_module(uu)
+          apt_pkg.init()
           allowed = uu.get_allowed_origins()
           print("allowed origins:", allowed)
           cache = apt.Cache()
